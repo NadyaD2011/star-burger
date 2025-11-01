@@ -7,6 +7,8 @@ from .models import Product
 from .models import ProductCategory
 from .models import Restaurant
 from .models import RestaurantMenuItem
+from .models import Order
+from .models import OrderItem
 
 
 class RestaurantMenuItemInline(admin.TabularInline):
@@ -93,6 +95,7 @@ class ProductAdmin(admin.ModelAdmin):
         return format_html('<img src="{url}" style="max-height: 200px;"/>', url=obj.image.url)
     get_image_preview.short_description = 'превью'
 
+
     def get_image_list_preview(self, obj):
         if not obj.image or not obj.id:
             return 'нет картинки'
@@ -104,3 +107,24 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(ProductCategory)
 class ProductAdmin(admin.ModelAdmin):
     pass
+
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    search_fields = [
+        'surname',
+        'name',
+    ]
+    list_display = [
+        'surname',
+        'name',
+        'address',
+    ]
+    inlines = [
+        OrderItemInline
+    ]
