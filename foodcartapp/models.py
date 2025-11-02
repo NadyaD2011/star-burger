@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator
 from phonenumber_field.modelfields import PhoneNumberField
+from django.core.exceptions import ValidationError
 
 
 class Restaurant(models.Model):
@@ -125,15 +126,15 @@ class RestaurantMenuItem(models.Model):
 
 
 class Order(models.Model):
-    name = models.CharField(
+    firstname = models.CharField(
         'имя',
         max_length=100
     )
-    surname = models.CharField(
+    lastname = models.CharField(
         'фамилия',
         max_length=100
     )
-    phone_number = PhoneNumberField(
+    phonenumber = PhoneNumberField(
         verbose_name='контактный телефон',
         region='RU',
         max_length=15
@@ -146,12 +147,17 @@ class Order(models.Model):
     class Meta:
         verbose_name = 'заказ'
         verbose_name_plural = 'заказы'
-        unique_together = [
-            ['surname', 'name',  'address']
-        ]
 
     def __str__(self):
         return f"{self.name} {self.surname}"
+
+
+def validate_quantity(value):
+    if value <= 0:
+        raise ValidationError(
+            "количество не может быть равно нулю или быть отрицательным числом",
+            params={'value': value},
+        )
 
 
 class OrderItem(models.Model):
@@ -170,6 +176,7 @@ class OrderItem(models.Model):
     )
     quantity = models.IntegerField(
         verbose_name='количество продукта',
+        validators=[validate_quantity]
     )
 
     class Meta:

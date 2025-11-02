@@ -1,9 +1,15 @@
-from django.http import JsonResponse
 from django.templatetags.static import static
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.serializers import ValidationError
+from rest_framework.serializers import Serializer
+from rest_framework.serializers import CharField
+from django.http import JsonResponse, Http404
+from django.shortcuts import redirect
+from .serializers import OrderSerializer
 
 from .models import Product, Order, OrderItem
-
-import json
 
 
 def banners_list_api(request):
@@ -58,35 +64,18 @@ def product_list_api(request):
     })
 
 
+@api_view(['POST'])
 def register_order(request):
-    try:
-        data = json.loads(request.body.decode('utf-8'))
-        print(data)
-        order = Order.objects.create(
-            name=data['firstname'],
-            surname =data['lastname'],
-            phone_number=data['phonenumber'],
-            address=data['address']
-        )
-        for item in data['products']:
-            product_id = item['product']
-            quantity = item['quantity']
+    serializer = OrderSerializer(data=request.data)
 
-            product = Product.objects.get(id=product_id)
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=quantity
-            )
-
-        return JsonResponse(
-            {
-                'status': "ok",
-                'message': 'Данные получены',
-                'order_id': order.id
-            }
+    if serializer.is_valid():
+        Order.objects.create(
+            firstname=serializer.validated_data['firstname'],
+            lastname=serializer.validated_data['lastname'],
+            phonenumber=serializer.validated_data['phonenumber'],
+            address=serializer.validated_data['address'],
+            products=serializer.validated_data['products']
         )
-    except ValueError:
-        return JsonResponse({
-            'status': 'error: ValueError',
-        })
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
