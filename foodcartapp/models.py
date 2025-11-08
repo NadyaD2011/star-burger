@@ -128,8 +128,10 @@ class RestaurantMenuItem(models.Model):
 
 class Order(models.Model):
     STATUS_CHOICES = [
-        ('pending', 'необработанный'),
-        ('processed', 'обработанный')
+        ("pending", "Pending"),
+        ("processing", "Processing"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
     ]
     PAYMENT_TYPE = [
         ('electronic', 'электронно'),
@@ -185,6 +187,14 @@ class Order(models.Model):
         default='electronic',
         choices=PAYMENT_TYPE,
         db_index=True
+    )
+    restaurant = models.ForeignKey(
+        Restaurant,
+        on_delete=models.PROTECT,
+        related_name="orders",
+        null=True,
+        blank=True,
+        verbose_name="ресторан"
     )
 
     class Meta:
