@@ -124,13 +124,15 @@ class OrderAdmin(admin.ModelAdmin):
         'firstname',
     ]
     list_filter = [
-        'status'
+        'status',
+        'payment_type'
     ]
     list_display = [
         'lastname',
         'firstname',
         'address',
-        'status'
+        'status',
+        'payment_type'
     ]
     inlines = [
         OrderItemInline

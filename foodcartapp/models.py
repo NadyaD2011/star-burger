@@ -131,6 +131,10 @@ class Order(models.Model):
         ('pending', 'необработанный'),
         ('processed', 'обработанный')
     ]
+    PAYMENT_TYPE = [
+        ('electronic', 'электронно'),
+        ('cash', 'наличными')
+    ]
 
     firstname = models.CharField(
         'имя',
@@ -174,6 +178,13 @@ class Order(models.Model):
         'дата доставки',
         blank=True,
         null=True
+    )
+    payment_type = models.CharField(
+        'вид оплаты',
+        max_length=10,
+        default='electronic',
+        choices=PAYMENT_TYPE,
+        db_index=True
     )
 
     class Meta:
