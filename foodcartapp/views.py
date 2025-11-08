@@ -2,11 +2,7 @@ from django.templatetags.static import static
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.serializers import ValidationError
-from rest_framework.serializers import Serializer
-from rest_framework.serializers import CharField
-from django.http import JsonResponse, Http404
-from django.shortcuts import redirect
+from django.http import JsonResponse
 from .serializers import OrderSerializer
 
 from .models import Product, Order, OrderItem
@@ -69,13 +65,34 @@ def register_order(request):
     serializer = OrderSerializer(data=request.data)
 
     if serializer.is_valid():
-        Order.objects.create(
+        order = Order.objects.create(
             firstname=serializer.validated_data['firstname'],
             lastname=serializer.validated_data['lastname'],
             phonenumber=serializer.validated_data['phonenumber'],
             address=serializer.validated_data['address'],
-            products=serializer.validated_data['products']
         )
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        for item in serializer.validated_data['products']:
+            try:
+                product_id = item['product']
+                quantity = item['quantity']
+            except Product.DoesNotExist:
+                return Response(
+                    {"error": f"Product with id {product_id} does not exist"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            OrderItem.objects.create(
+                order=order,
+                product=product_id,
+                quantity=quantity
+            )
+
+        data = {
+            'id': order.id,
+            'firstname': order.firstname,
+            'lastname': order.lastname,
+            'address': order.address,
+            'phonenumber': str(order.phonenumber)
+        }
+        return Response(data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

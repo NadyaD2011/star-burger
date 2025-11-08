@@ -149,7 +149,7 @@ class Order(models.Model):
         verbose_name_plural = 'заказы'
 
     def __str__(self):
-        return f"{self.name} {self.surname}"
+        return f"{self.firstname} {self.lastname}"
 
 
 def validate_quantity(value):
@@ -182,9 +182,6 @@ class OrderItem(models.Model):
     class Meta:
         verbose_name = 'пункт заказа'
         verbose_name_plural = 'пункты заказа'
-        unique_together = [
-            ['product', 'quantity']
-        ]
 
     def __str__(self):
-        return f"{self.quantity} {self.product}"
+        return f"{self.product} * {self.quantity}"
