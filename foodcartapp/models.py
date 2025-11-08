@@ -178,10 +178,21 @@ class OrderItem(models.Model):
         verbose_name='количество продукта',
         validators=[validate_quantity]
     )
+    price = models.DecimalField(
+        'цена',
+        max_digits=8,
+        decimal_places=2,
+        null=True
+    )
 
     class Meta:
         verbose_name = 'пункт заказа'
         verbose_name_plural = 'пункты заказа'
 
     def __str__(self):
-        return f"{self.product} * {self.quantity}"
+        return f"{self.order.firstname} {self.order.lastname} {self.order.address}"
+
+    def save(self, *args, **kwargs):
+        if not self.price:
+            self.price = self.product.price
+        super(OrderItem, self).save(*args, **kwargs)
