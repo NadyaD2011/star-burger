@@ -126,6 +126,11 @@ class RestaurantMenuItem(models.Model):
 
 
 class Order(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'необработанный'),
+        ('processed', 'обработанный')
+    ]
+
     firstname = models.CharField(
         'имя',
         max_length=100
@@ -142,6 +147,17 @@ class Order(models.Model):
     address = models.CharField(
         'адрес',
         max_length=250
+    )
+    status = models.CharField(
+        'статус заказа',
+        max_length=10,
+        default='pending',
+        choices=STATUS_CHOICES,
+        db_index=True
+    )
+    comment = models.TextField(
+        'комментарий к заказу',
+        blank=True
     )
 
     class Meta:
