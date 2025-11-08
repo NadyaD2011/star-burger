@@ -125,7 +125,6 @@ class RestaurantMenuItem(models.Model):
     def __str__(self):
         return f"{self.restaurant.name} - {self.product.name}"
 
-
 class Order(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -187,14 +186,6 @@ class Order(models.Model):
         default='electronic',
         choices=PAYMENT_TYPE,
         db_index=True
-    )
-    restaurant = models.ForeignKey(
-        Restaurant,
-        on_delete=models.PROTECT,
-        related_name="orders",
-        null=True,
-        blank=True,
-        verbose_name="ресторан"
     )
 
     class Meta:
