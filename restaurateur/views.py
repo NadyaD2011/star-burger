@@ -3,6 +3,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 from django.urls import reverse_lazy
 from django.contrib.auth.decorators import user_passes_test
+from geopy import distance
 
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import views as auth_views
@@ -93,9 +94,9 @@ def view_restaurants(request):
 
 @user_passes_test(is_manager, login_url='restaurateur:login')
 def view_orders(request):
-    orders = Order.objects.filter(status='pending').annotate(
+    orders = Order.objects.filter(status__in=["pending", "processing"]).annotate(
         priсe=Sum(F('order_items__price') * F('order_items__quantity')),
     )
-    return render(request, template_name='order_items.html', context={
-        'order_items': orders,
-    })
+
+    return render(request, template_name='order_items.html',
+                  context={'order_items': orders})
