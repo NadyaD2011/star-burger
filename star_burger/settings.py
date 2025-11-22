@@ -1,16 +1,16 @@
 import os
-
 import dj_database_url
 
+from dotenv import load_dotenv
 from environs import Env
 
+load_dotenv()
 
 env = Env()
 env.read_env()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env.bool('DEBUG', True)
@@ -20,15 +20,19 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', ['127.0.0.1', 'localhost'])
 INSTALLED_APPS = [
     'foodcartapp.apps.FoodcartappConfig',
     'restaurateur.apps.RestaurateurConfig',
+    'address.apps.AddressConfig',
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
     'debug_toolbar',
-    "phonenumber_field",
+    'phonenumber_field',
     'rest_framework',
+    'geopy'
 ]
 
 MIDDLEWARE = [
@@ -134,3 +138,4 @@ STATICFILES_DIRS = [
 ]
 
 GEOCODER_KEY = os.environ.get('GEOCODER_KEY')
+YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY')

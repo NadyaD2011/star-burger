@@ -3,12 +3,18 @@ from django.shortcuts import redirect, render
 from django.views import View
 from django.urls import reverse_lazy
 from django.contrib.auth.decorators import user_passes_test
-
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Sum, F, Count
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import views as auth_views
 
 from foodcartapp.models import Product, Restaurant, Order
-from django.db.models import Sum, F
+from address.models import Address
+from star_burger.settings import YANDEX_API_KEY
+
+from decimal import Decimal, InvalidOperation
+from geopy import distance
+import requests
 
 
 class Login(forms.Form):
@@ -90,11 +96,99 @@ def view_restaurants(request):
     })
 
 
+def get_restaurants_for_order_efficient(order):
+    order_items = order.order_items.all()
+
+    if not order_items.exists():
+        return Restaurant.objects.none()
+
+    product_ids = list(order_items.values_list('product_id', flat=True))
+
+    restaurants = Restaurant.objects.filter(
+        menu_items__product__in=product_ids,
+        menu_items__availability=True,
+    ).annotate(
+        available_items_count=Count('menu_items__product', distinct=True)
+    ).filter(
+        available_items_count=len(set(product_ids))
+    ).distinct()
+
+    return restaurants
+
+
+def fetch_coordinates(apikey, address):
+    try:
+        try:
+            address = Address.objects.get(name=address)
+            lon = address.lon
+            lat = address.lat
+            if lon is None or lat is None:
+                raise ObjectDoesNotExist
+        except ObjectDoesNotExist:
+            base_url = "https://geocode-maps.yandex.ru/1.x"
+            response = requests.get(base_url, params={
+                "geocode": address,
+                "apikey": apikey,
+                "format": "json",
+            })
+            response.raise_for_status()
+            found_places = response.json()['response']['GeoObjectCollection']['featureMember']
+
+            if not found_places:
+                return None
+
+            most_relevant = found_places[0]
+            lon, lat = most_relevant['GeoObject']['Point']['pos'].split(" ")
+
+            try:
+                lon = Decimal(lon.strip())
+                lat = Decimal(lat.strip())
+            except InvalidOperation:
+                return None
+
+            Address.objects.filter(name=address).delete()
+            Address.objects.create(
+                name=address,
+                lon=lon,
+                lat=lat
+            )
+        return float(lat), float(lon)
+    except (requests.HTTPError, requests.RequestException, KeyError, ValueError, TypeError):
+        return None
+
+
 @user_passes_test(is_manager, login_url='restaurateur:login')
 def view_orders(request):
+    apikey = YANDEX_API_KEY
+
     orders = Order.objects.filter(status__in=["pending", "processing"]).annotate(
-        priсe=Sum(F('order_items__price') * F('order_items__quantity')),
+        priсe=Sum(F('order_items__price') * F('order_items__quantity'))
     )
+
+    for order in orders:
+        restaurants = get_restaurants_for_order_efficient(order)
+        ready_restaurants = []
+
+        for restaurant in restaurants:
+            address_restaurant = fetch_coordinates(apikey, Restaurant.objects.filter(name=restaurant).first().address)
+            if address_restaurant is None:
+                continue
+
+            address_order = fetch_coordinates(apikey, order.address)
+            if address_order is None:
+                continue
+
+            distance_order = distance.distance(
+                address_restaurant,
+                address_order
+            ).km
+
+            ready_restaurants.append({
+                'name': restaurant,
+                'distance': round(distance_order, 2)
+            })
+
+        order.ready_restaurants = sorted(ready_restaurants, key=lambda x: x['distance'])
 
     return render(request, template_name='order_items.html',
                   context={'order_items': orders})

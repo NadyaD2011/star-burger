@@ -1,8 +1,9 @@
 from django.db import models
 from django.core.validators import MinValueValidator
-from phonenumber_field.modelfields import PhoneNumberField
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+
+from phonenumber_field.modelfields import PhoneNumberField
 
 
 class Restaurant(models.Model):
@@ -124,6 +125,7 @@ class RestaurantMenuItem(models.Model):
 
     def __str__(self):
         return f"{self.restaurant.name} - {self.product.name}"
+    
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -186,6 +188,14 @@ class Order(models.Model):
         default='electronic',
         choices=PAYMENT_TYPE,
         db_index=True
+    )
+    restaurant = models.ForeignKey(
+        Restaurant,
+        on_delete=models.PROTECT,
+        related_name="orders",
+        null=True,
+        blank=True,
+        verbose_name="ресторан"
     )
 
     class Meta:
