@@ -2,8 +2,10 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from collections import defaultdict
 
 from phonenumber_field.modelfields import PhoneNumberField
+from django.db.models import Sum, F
 
 
 class Restaurant(models.Model):
@@ -125,7 +127,54 @@ class RestaurantMenuItem(models.Model):
 
     def __str__(self):
         return f"{self.restaurant.name} - {self.product.name}"
-    
+
+
+class OrderQuerySet(models.QuerySet):
+    def get_total_price(self):
+        return self.annotate(price=Sum(F('order_items__price') * F('order_items__quantity')))
+
+    def annotate_available_restaurants(self):
+        order_items = self.prefetch_related('order_items').values_list('id', 'order_items__product_id')
+        order_to_product_ids = defaultdict(set)
+        all_product_ids = set()
+
+        for order_id, product_id in order_items:
+            if product_id is not None:
+                order_to_product_ids[order_id].add(product_id)
+                all_product_ids.add(product_id)
+
+        if not all_product_ids:
+            for order in self:
+                order.available_restaurant_ids = set()
+            return self
+
+        menu_items = (
+            RestaurantMenuItem.objects.filter(
+                product_id__in=all_product_ids,
+                availability=True
+            )
+            .values_list('restaurant_id', 'product_id')
+        )
+
+        restaurant_to_products = defaultdict(set)
+        for restaurant_id, product_id in menu_items:
+            restaurant_to_products[restaurant_id].add(product_id)
+
+        for order in self:
+            required = order_to_product_ids.get(order.id, set())
+            if not required:
+                order.available_restaurant_ids = set()
+                continue
+
+            suitable_restaurants = set()
+            for restaurant_id, products in restaurant_to_products.items():
+                if required.issubset(products):
+                    suitable_restaurants.add(restaurant_id)
+
+            order.available_restaurant_ids = suitable_restaurants
+
+        return self
+
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -150,7 +199,8 @@ class Order(models.Model):
     phonenumber = PhoneNumberField(
         verbose_name='контактный телефон',
         region='RU',
-        max_length=15
+        max_length=15,
+        db_index=True
     )
     address = models.CharField(
         'адрес',
@@ -175,17 +225,18 @@ class Order(models.Model):
     called_date = models.DateTimeField(
         'дата звонка',
         blank=True,
-        null=True
+        null=True,
+        db_index=True
     )
     delivered_date = models.DateTimeField(
         'дата доставки',
         blank=True,
-        null=True
+        null=True,
+        db_index=True
     )
     payment_type = models.CharField(
         'вид оплаты',
         max_length=10,
-        default='electronic',
         choices=PAYMENT_TYPE,
         db_index=True
     )
@@ -197,6 +248,8 @@ class Order(models.Model):
         blank=True,
         verbose_name="ресторан"
     )
+
+    objects = OrderQuerySet.as_manager()
 
     class Meta:
         verbose_name = 'заказ'
@@ -219,8 +272,7 @@ class OrderItem(models.Model):
         Order,
         on_delete=models.CASCADE,
         related_name='order_items',
-        verbose_name='заказ',
-        default=1
+        verbose_name='заказ'
     )
     product = models.ForeignKey(
         Product,
@@ -236,7 +288,7 @@ class OrderItem(models.Model):
         'цена',
         max_digits=8,
         decimal_places=2,
-        null=True
+        default=1
     )
 
     class Meta:

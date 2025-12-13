@@ -3,18 +3,17 @@ from django.shortcuts import redirect, render
 from django.views import View
 from django.urls import reverse_lazy
 from django.contrib.auth.decorators import user_passes_test
-from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Sum, F, Count
 from django.contrib.auth import authenticate, login
 from django.contrib.auth import views as auth_views
+from django.db import transaction
 
 from foodcartapp.models import Product, Restaurant, Order
-from address.models import Address
+from address.models import Place
 from star_burger.settings import YANDEX_API_KEY
+from address.views import fetch_coordinates
+from django.db.models import Count
 
-from decimal import Decimal, InvalidOperation
 from geopy import distance
-import requests
 
 
 class Login(forms.Form):
@@ -96,99 +95,79 @@ def view_restaurants(request):
     })
 
 
-def get_restaurants_for_order_efficient(order):
-    order_items = order.order_items.all()
+def get_or_create_coordinates(addresses, apikey):
+    unique_addresses = set(addr.strip() for addr in addresses if addr and addr.strip())
+    if not unique_addresses:
+        return {}
 
-    if not order_items.exists():
-        return Restaurant.objects.none()
+    existing_places = Place.objects.filter(address__in=unique_addresses)
+    coords = {place.address: place.coordinates for place in existing_places}
 
-    product_ids = list(order_items.values_list('product_id', flat=True))
+    missing_addresses = unique_addresses - set(coords.keys())
 
-    restaurants = Restaurant.objects.filter(
-        menu_items__product__in=product_ids,
-        menu_items__availability=True,
-    ).annotate(
-        available_items_count=Count('menu_items__product', distinct=True)
-    ).filter(
-        available_items_count=len(set(product_ids))
-    ).distinct()
+    new_places = []
+    for addr in missing_addresses:
+        yandex_coords = fetch_coordinates(apikey, addr)
+        if yandex_coords:
+            lat, lon = yandex_coords
+            new_places.append(Place(address=addr, lat=lat, lon=lon))
+            coords[addr] = (lat, lon)
+        else:
+            coords[addr] = None
 
-    return restaurants
+    if new_places:
+        with transaction.atomic():
+            Place.objects.bulk_create(new_places, ignore_conflicts=True)
 
-
-def fetch_coordinates(apikey, address):
-    try:
-        try:
-            address = Address.objects.get(name=address)
-            lon = address.lon
-            lat = address.lat
-            if lon is None or lat is None:
-                raise ObjectDoesNotExist
-        except ObjectDoesNotExist:
-            base_url = "https://geocode-maps.yandex.ru/1.x"
-            response = requests.get(base_url, params={
-                "geocode": address,
-                "apikey": apikey,
-                "format": "json",
-            })
-            response.raise_for_status()
-            found_places = response.json()['response']['GeoObjectCollection']['featureMember']
-
-            if not found_places:
-                return None
-
-            most_relevant = found_places[0]
-            lon, lat = most_relevant['GeoObject']['Point']['pos'].split(" ")
-
-            try:
-                lon = Decimal(lon.strip())
-                lat = Decimal(lat.strip())
-            except InvalidOperation:
-                return None
-
-            Address.objects.filter(name=address).delete()
-            Address.objects.create(
-                name=address,
-                lon=lon,
-                lat=lat
-            )
-        return float(lat), float(lon)
-    except (requests.HTTPError, requests.RequestException, KeyError, ValueError, TypeError):
-        return None
+    return coords
 
 
 @user_passes_test(is_manager, login_url='restaurateur:login')
 def view_orders(request):
-    apikey = YANDEX_API_KEY
-
-    orders = Order.objects.filter(status__in=["pending", "processing"]).annotate(
-        priсe=Sum(F('order_items__price') * F('order_items__quantity'))
+    orders = (
+        Order.objects
+        .get_total_price()
+        .filter(status__in=["pending", "processing"])
+        .annotate_available_restaurants()
     )
 
+    if not orders:
+        return render(request, 'order_items.html', {'order_items': []})
+
+    addresses = set()
+    restaurant_ids = set()
+
     for order in orders:
-        restaurants = get_restaurants_for_order_efficient(order)
+        addresses.add(order.address)
+        restaurant_ids.update(order.available_restaurant_ids)
+
+    restaurants_by_id = {}
+    if restaurant_ids:
+        restaurants = Restaurant.objects.filter(id__in=restaurant_ids)
+        for r in restaurants:
+            restaurants_by_id[r.id] = r
+            addresses.add(r.address)
+
+    coords_map = get_or_create_coordinates(addresses, YANDEX_API_KEY)
+
+    for order in orders:
         ready_restaurants = []
+        order_coords = coords_map.get(order.address)
 
-        for restaurant in restaurants:
-            address_restaurant = fetch_coordinates(apikey, Restaurant.objects.filter(name=restaurant).first().address)
-            if address_restaurant is None:
+        for rest_id in order.available_restaurant_ids:
+            restaurant = restaurants_by_id.get(rest_id)
+            if not restaurant:
                 continue
 
-            address_order = fetch_coordinates(apikey, order.address)
-            if address_order is None:
-                continue
+            rest_coords = coords_map.get(restaurant.address)
 
-            distance_order = distance.distance(
-                address_restaurant,
-                address_order
-            ).km
-
-            ready_restaurants.append({
-                'name': restaurant,
-                'distance': round(distance_order, 2)
-            })
+            if order_coords and rest_coords:
+                dist_km = distance.distance(order_coords, rest_coords).km
+                ready_restaurants.append({
+                    'name': restaurant,
+                    'distance': round(dist_km, 2)
+                })
 
         order.ready_restaurants = sorted(ready_restaurants, key=lambda x: x['distance'])
 
-    return render(request, template_name='order_items.html',
-                  context={'order_items': orders})
+    return render(request, 'order_items.html', {'order_items': orders})

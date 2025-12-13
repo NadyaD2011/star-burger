@@ -28,7 +28,7 @@
     {% for item in order_items %}
       <tr>
         <td>{{ item.id }}</td>
-        <td>{{ item.priсe }} руб.</td>
+        <td>{{ item.price }} руб.</td>
         <td>{{ item.status }}</td>
         <td>{{ item.payment_type }}</td>
         <td>{{ item }}</td>
@@ -36,30 +36,30 @@
         <td>{{ item.address }}</td>
         <td>{{ item.comment }}</td>
         <td>
-            <details>
-              <summary>
-                Развернуть
-              </summary>
               {% if item.status == 'pending' %}
                 {% if item.ready_restaurants %}
-                  Может быть приготовлен:
-                  <ul>
-                    {% for restaurant in item.ready_restaurants %}
-                      <li>
-                        {{ restaurant.name }} - {{ restaurant.distance }} км
-                      </li>
-                    {% endfor %}
+                  <details>
+                    <summary>
+                      Развернуть
+                    </summary>
+                    Может быть приготовлен:
+                    <ul>
+                      {% for restaurant in item.ready_restaurants %}
+                        <li>
+                          {{ restaurant.name }} - {{ restaurant.distance }} км
+                        </li>
+                      {% endfor %}
+                      </ul>
+                  </details>
                 {% else %}
                   Ошибка получения координат
                 {% endif %}
               {% elif item.status == 'processing' %}
                   Готовится {{ item.restaurant }}
               {% endif %}
-              </ul>
-          </details>
         </td>
         <td>
-          <a href="{% url 'admin:foodcartapp_order_change' item.id %}?next=/manager/orders/">Редактировать</a>
+          <a href="{% url 'admin:foodcartapp_order_change' item.id %}?next={{ request.get_full_path|urlencode }}">Редактировать</a>
         </td>
       </tr>
     {% endfor %}

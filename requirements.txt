@@ -7,3 +7,4 @@ djangorestframework==3.16.1
 geopy==2.4.1
 requests==2.32.3
 python-dotenv==0.9.1
+phonenumbers==9.0.*
