@@ -1,15 +1,15 @@
 from django.contrib import admin
 
-from .models import Address
+from .models import Place
 
 
-@admin.register(Address)
-class AddressAdmin(admin.ModelAdmin):
+@admin.register(Place)
+class PlaceAdmin(admin.ModelAdmin):
     search_fields = [
-        'name'
+        'address'
     ]
     list_display = [
-        'name',
+        'address',
         'lon',
         'lat'
     ]
