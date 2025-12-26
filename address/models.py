@@ -23,7 +23,7 @@ class Place(models.Model):
         verbose_name = 'адрес'
         verbose_name_plural = 'адреса'
         unique_together = [
-            ['lon', 'lat']
+            ['address']
         ]
 
     def __str__(self):
